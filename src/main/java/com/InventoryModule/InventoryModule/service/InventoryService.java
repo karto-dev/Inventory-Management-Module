@@ -25,14 +25,20 @@ public class InventoryService {
 
     @Cacheable(value = "inventory", key = "#productId")
     public int getAvailableQuantity(Long productId) {
-        Product product = productRepo.findById(productId).orElseThrow();
-        Inventory inventory = inventoryRepo.findByProduct(product).orElseThrow();
+        Product product = productRepo.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found with id: " + productId));
+
+        Inventory inventory = inventoryRepo.findByProduct(product)
+                .orElseThrow(() -> new RuntimeException("Inventory not found for product: " + product.getName()));
+
         return inventory.getQuantityAvailable();
     }
 
     @CacheEvict(value = "inventory", key = "#productId")
     public Inventory createOrUpdateInventory(Long productId, int quantity) {
-        Product product = productRepo.findById(productId).orElseThrow();
+        Product product = productRepo.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found with id: " + productId));
+
         Optional<Inventory> optional = inventoryRepo.findByProduct(product);
         Inventory inventory = optional.orElse(new Inventory(null, product, 0));
         inventory.setQuantityAvailable(inventory.getQuantityAvailable() + quantity);
@@ -41,10 +47,15 @@ public class InventoryService {
 
     @CacheEvict(value = "inventory", key = "#productId")
     public synchronized boolean reserveItem(Long productId, int quantity, String reservationRef) {
-        Product product = productRepo.findById(productId).orElseThrow();
-        Inventory inventory = inventoryRepo.findByProduct(product).orElseThrow();
+        Product product = productRepo.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found with id: " + productId));
 
-        if (inventory.getQuantityAvailable() < quantity) return false;
+        Inventory inventory = inventoryRepo.findByProduct(product)
+                .orElseThrow(() -> new RuntimeException("Inventory not found for product: " + product.getName()));
+
+        if (inventory.getQuantityAvailable() < quantity) {
+            return false;
+        }
 
         inventory.setQuantityAvailable(inventory.getQuantityAvailable() - quantity);
         inventoryRepo.save(inventory);
@@ -60,11 +71,9 @@ public class InventoryService {
         return true;
     }
 
-
     public Product createProduct(Product product) {
         return productRepo.save(product);
     }
-
 
     @Transactional
     public boolean cancelReservation(String reservationRef) {
@@ -73,14 +82,16 @@ public class InventoryService {
 
         for (Reservation r : reservations) {
             if (r.isActive()) {
-                Inventory inventory = inventoryRepo.findByProduct(r.getProduct()).orElseThrow();
+                Inventory inventory = inventoryRepo.findByProduct(r.getProduct())
+                        .orElseThrow(() -> new RuntimeException("Inventory not found during reservation cancel for product: " + r.getProduct().getName()));
+
                 inventory.setQuantityAvailable(inventory.getQuantityAvailable() + r.getQuantity());
                 inventoryRepo.save(inventory);
+
                 r.setActive(false);
                 reservationRepo.save(r);
             }
         }
         return true;
     }
-
 }
