@@ -2,6 +2,7 @@ package com.InventoryModule.InventoryModule;
 
 import com.InventoryModule.InventoryModule.Entity.Inventory;
 import com.InventoryModule.InventoryModule.Entity.Product;
+import com.InventoryModule.InventoryModule.Entity.Reservation;
 import com.InventoryModule.InventoryModule.repo.InventoryRepository;
 import com.InventoryModule.InventoryModule.repo.ProductRepository;
 import com.InventoryModule.InventoryModule.repo.ReservationRepository;
@@ -13,7 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Optional;
+import java.util.*;
 
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -112,4 +113,48 @@ class InventoryServiceTest {
         assertTrue(exception.getMessage().contains("Product not found"));
         verify(reservationRepo, never()).save(any());
     }
+
+    @Test
+    void testCreateOrUpdateInventory_NewProductInventory() {
+        when(productRepo.findById(1L)).thenReturn(Optional.of(testProduct));
+        when(inventoryRepo.findByProduct(testProduct)).thenReturn(Optional.empty());
+
+        Inventory saved = Inventory.builder()
+                .id(1L)
+                .product(testProduct)
+                .quantityAvailable(10)
+                .build();
+
+        when(inventoryRepo.save(any(Inventory.class))).thenReturn(saved);
+
+        Inventory result = inventoryService.createOrUpdateInventory(1L, 10);
+
+        assertEquals(10, result.getQuantityAvailable());
+        verify(inventoryRepo).save(any(Inventory.class));
+    }
+    @Test
+    void testCancelReservation_Success() {
+        Reservation reservation = Reservation.builder()
+                .id(1L)
+                .product(testProduct)
+                .quantity(5)
+                .reservationReference("RES-123")
+                .active(true)
+                .build();
+
+        testInventory.setQuantityAvailable(10);
+
+        when(reservationRepo.findByReservationReference("RES-123")).thenReturn(List.of(reservation));
+        when(inventoryRepo.findByProduct(testProduct)).thenReturn(Optional.of(testInventory));
+        when(inventoryRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(reservationRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        boolean result = inventoryService.cancelReservation("RES-123");
+
+        assertTrue(result);
+        assertEquals(15, testInventory.getQuantityAvailable()); // 10 + 5
+        assertFalse(reservation.isActive());
+    }
+
+
 }
